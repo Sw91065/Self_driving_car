@@ -1,15 +1,22 @@
 import pandas as pd
-import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib import image as mpimg
 import os
 from sklearn.utils import shuffle
-import cv2
 import numpy as np
-import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import cv2
-import imgaug
+import matplotlib.image as mpimg
+from imgaug import augmenters as iaa
+import random
+
+from keras.api.models import Sequential
+from keras.api.layers import Convolution2D, Flatten, Dense, Conv2D
+from keras.api.optimizers import Adam
+from keras.api.models import save_model
+# from keras.models import Sequential
+# from keras.layers import Conv2D, Flatten, Dense
+# from keras.optimizers import Adam
+
+
 def getName(filepath):
     return filepath.split('\\')[-1]
 
@@ -90,3 +97,48 @@ def augmentImage(imgPath,steering):
 imaRe,st= augmentImage('test.jpg',0)
 plt.imshow(imaRe)
 plt.show()
+
+def preProcess(img):
+    img = img[60:135,:,:]
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+    img = cv2.GaussianBlur(img,  (3, 3), 0)
+    img = cv2.resize(img, (200, 66))
+    img = img/255
+    return img
+
+
+def batchGen(imagesPath, steeringList, batchSize, trainFlag):
+    while True:
+        imgBatch = []
+        steeringBatch = []
+
+        for i in range(batchSize):
+            index = random.randint(0, len(imagesPath) - 1)
+            if trainFlag:
+                img, steering = augmentImage(imagesPath[index], steeringList[index])
+            else:
+                img = mpimg.imread(imagesPath[index])
+                steering = steeringList[index]
+            img = preProcess(img)
+            imgBatch.append(img)
+            steeringBatch.append(steering)
+        yield (np.asarray(imgBatch), np.asarray(steeringBatch))
+
+
+def createModel():
+    model = Sequential()
+
+    model.add(Convolution2D(24, (5, 5), (2, 2), input_shape=(66, 200, 3), activation='elu'))
+    model.add(Convolution2D(36, (5, 5), (2, 2), activation='elu'))
+    model.add(Convolution2D(48, (5, 5), (2, 2), activation='elu'))
+    model.add(Convolution2D(64, (3, 3), activation='elu'))
+    model.add(Convolution2D(64, (3, 3), activation='elu'))
+
+    model.add(Flatten())
+    model.add(Dense(100, activation='elu'))
+    model.add(Dense(50, activation='elu'))
+    model.add(Dense(10, activation='elu'))
+    model.add(Dense(1))
+
+    model.compile(Adam(learning_rate=0.0001), loss='mse')
+    return model
